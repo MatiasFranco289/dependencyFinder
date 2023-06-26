@@ -118,19 +118,30 @@ def sanitizeWord(word):
 def getMatViewsDependencies():
     global matViewsData
     keyword = ["from", "join", "FROM", "JOIN"]
+    undesiredDependencies = []
 
+    # Por cada vista
     for matview in matViewsData:
         viewWords = matview["definition"].split()
 
+        # Por cada palabras en su codigo fuente
         for i in range(len(viewWords)):
             actualWord = viewWords[i]
-
+            # Cualquier palabra despues de un FROM o JOIN no vacia es agregada como dependencia
             if (keyword.__contains__(actualWord)):
                 nextWord = sanitizeWord(viewWords[i + 1])
                 if (nextWord != None):
                     matview["dependencies"].add(nextWord)
 
+            # Como se agregan todas las palabras despues de un FROM puede ser que esa dependencia
+            # Sea una dependencia agregada con la clausula WITH en cuyo caso no me interesaria porque
+            # No es ni una tabla ni una vista ni una vista materializada
+            # Asi que las agrego a una lista para depues poder filtrarlas y eliminarlas
+            if(actualWord == "WITH"):
+                undesiredDependencies.append(sanitizeWord(viewWords[i + 1]))
 
+        # Filtro y elimino dependencias agregadas por WITH
+        matview["dependencies"] = tuple(x for x in matview["dependencies"] if not undesiredDependencies.__contains__(x))
 def isFundamentalView(dependencies):
     # Esta funcion determina si una vista es fundamental o no
     # Una vista fundamental si no hace uso de otras vistas

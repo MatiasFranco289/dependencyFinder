@@ -6,6 +6,7 @@ import psycopg2
 from dotenv import load_dotenv
 import colorama
 from colorama import Fore
+from datetime import datetime
 
 colorama.init()
 load_dotenv()
@@ -219,11 +220,24 @@ def stopTimer():
     timerFlag = False
     timerThread.join()
 
+def getMatViewCount(matviewName):
+    try:
+        query = f'SELECT COUNT(*) FROM "{matviewName}";'
+        cursor.execute(query)
+        viewRecordsAmount = cursor.fetchone()[0]
+        return viewRecordsAmount
+    except Exception as e:
+        return "ERROR"
 
 def refreshAll():
     for view in refreshOrder:
-        query = f'REFRESH MATERIALIZED VIEW "{view}";'
 
+        logger(["", "---"])
+        logger([view])
+        logger(["---"])
+        logger([f"Cantidad de registros anterior: {getMatViewCount(view)}"])
+
+        query = f'REFRESH MATERIALIZED VIEW "{view}";'
         print(Fore.WHITE + "Resfrescando vista materializada " + Fore.CYAN + f"{view}" + Fore.WHITE + ".")
         startTimer()
 
@@ -241,7 +255,9 @@ def refreshAll():
             stopTimer()
             print(Fore.CYAN + f"{view} " + Fore.GREEN + "refrescada correctamente.")
             print("")
+            logger([f"Cantidad de registros actual: {getMatViewCount(view)}"])
 
+        logger(["---", ""])
 
 def timer():
     elapsedTime = 0
@@ -251,13 +267,27 @@ def timer():
         elapsedTime += 1
         time.sleep(1)
 
+def logger(messages):
+    # Esta funcion escribe en un archivo de texto la cantidad de registros en vistas materializadas
+    # antes y despues del refresco
+    # Recibe un array de string
+
+    for message in messages:
+        try:
+            with open("log.txt", 'a') as file:
+                file.write(message + '\n')
+        except FileNotFoundError:
+            with open("log.txt", 'w') as file:
+                file.write(message + '\n')
 
 getTableNames()
 getMatViewsDefinition()
 getMatViewsDependencies()
 setMatViewsPriority()
 checkUserConfirmation("Esta seguro que desea refrescar estas vistas materializadas? [Y,N]: ")
+logger(["----------", f"{datetime.now().strftime('%d-%m-%Y')} {datetime.now().strftime('%H:%M:%S')}", "----------"])
 refreshAll()
+logger(["", ""])
 print("")
 conn.close()
 print(Fore.WHITE + "Ejecucion terminada.")

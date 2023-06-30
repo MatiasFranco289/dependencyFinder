@@ -3,13 +3,13 @@ import sys
 import time
 import threading
 import psycopg2
-from dotenv import load_dotenv
 import colorama
 from colorama import Fore
 from datetime import datetime
+from dotenv import load_dotenv
 
-colorama.init()
 load_dotenv()
+colorama.init()
 
 timerFlag = False
 timerThread = None
@@ -18,25 +18,37 @@ matViewsData = []
 refreshOrder = []
 tableNames = []
 
-# Conectarse a la base de datos
-print(Fore.WHITE + "Por favor introduzca los datos de de la DB")
-print("---------------------------")
+# Si no hay un archivo .env en el directorio tiro error
+if not os.path.isfile('.env'):
+    raise FileNotFoundError("El archivo .env no existe en el directorio actual.")
 
-dbName = input("Nombre de la DB: ")
-dbUser = input("Usuario: ")
-dbPass = input("Contraseña: ")
-dbHost = input("Host: ")
-dbPort = input("Puerto: ")
+# Obtengo las variables del archivo .env
+connectionParameters = {
+    "dbName": os.getenv('DB_NAME'),
+    "dbUser": os.getenv('DB_USER'),
+    "dbPass": os.getenv('DB_PASS'),
+    "dbHost": os.getenv('DB_HOST'),
+    "dbPort": os.getenv('DB_PORT'),
+}
 
-print("-----------------------")
-print("Conectando a la DB ..")
+# Verifico que todas las variables de conexion esten definidas en el .env
+for key in connectionParameters:
+    if connectionParameters[key] is None:
+        raise KeyError(f"La variable {key} no esta definida en el archivo .env")
 
+# Intento conectar a la DB
 try:
-    # Intento conectar
-    conn = psycopg2.connect(database=dbName, user=dbUser, password=dbPass, host=dbHost, port=dbPort)
+    conn = psycopg2.connect(
+        database=connectionParameters["dbName"],
+        user=connectionParameters["dbUser"],
+        password=connectionParameters["dbPass"],
+        host=connectionParameters["dbHost"],
+        port=connectionParameters["dbPort"]
+    )
+
     cursor = conn.cursor()
 except Exception as e:
-    print(Fore.RED + "No se puedo establencer conexion con la DB.")
+    print(Fore.RED + "No se puedo establecer conexion con la DB.")
     print("La siguiente excepcion ha ocurrido mientras se intentaba conectar: ")
     print(" ")
     print(e)
@@ -129,9 +141,9 @@ def getMatViewsDependencies():
         for i in range(len(viewWords)):
             actualWord = viewWords[i]
             # Cualquier palabra despues de un FROM o JOIN no vacia es agregada como dependencia
-            if (keyword.__contains__(actualWord)):
+            if keyword.__contains__(actualWord):
                 nextWord = sanitizeWord(viewWords[i + 1])
-                if (nextWord != None):
+                if nextWord is not None:
                     matview["dependencies"].add(nextWord)
 
             # Como se agregan todas las palabras despues de un FROM puede ser que esa dependencia
@@ -143,20 +155,9 @@ def getMatViewsDependencies():
 
         # Filtro y elimino dependencias agregadas por WITH
         matview["dependencies"] = tuple(x for x in matview["dependencies"] if not undesiredDependencies.__contains__(x))
-def isFundamentalView(dependencies):
-    # Esta funcion determina si una vista es fundamental o no
-    # Una vista fundamental si no hace uso de otras vistas
-    global matViewsName
-
-    for dependency in dependencies:
-        ## Si la lista que contiene el nombre de todas las vistas contiene el nombre de aunque sea una de la dependencias
-        ## de la vista, devuelve false
-        if (matViewsName.__contains__(dependency)):
-            return False
-    return True
 
 
-def isDependancy(usedDependencies, validDependencies):
+def isDependency(usedDependencies, validDependencies):
     # Esta funcion determina si las dependencias de una vista se encuentran en la lista de dependencias validas
 
     for dependency in usedDependencies:
@@ -176,7 +177,7 @@ def setMatViewsPriority():
     i = 0
     while i < len(matViewsData):
         actualmatview = matViewsData[i]
-        if isDependancy(actualmatview["dependencies"], refreshOrder):
+        if isDependency(actualmatview["dependencies"], refreshOrder):
             refreshOrder.append(actualmatview["name"])
             print(actualmatview["name"])
             del matViewsData[i]
@@ -198,11 +199,11 @@ def checkUserConfirmation(question):
     validRespones = ["Y", "N"]
     print(Fore.WHITE + "----------------")
     print("")
-    userResponse = input(question)
+    userResponse = input(question).upper()
 
     while not validRespones.__contains__(userResponse):
         print(Fore.RED + "Resupuesta no valida. Introduza Y para confirmar o N para negar.")
-        userResponse = input()
+        userResponse = input().upper()
 
     if userResponse != "Y":
         sys.exit()
@@ -228,6 +229,7 @@ def getMatViewCount(matviewName):
         return viewRecordsAmount
     except Exception as e:
         return "ERROR"
+
 
 def refreshAll():
     for view in refreshOrder:
@@ -259,13 +261,15 @@ def refreshAll():
 
         logger(["---", ""])
 
+
 def timer():
-    elapsedTime = 0
+    elapsedtime = 0
 
     while timerFlag:
-        print(f"Refrescando {elapsedTime}s")
-        elapsedTime += 1
+        print(f"Refrescando {elapsedtime}s")
+        elapsedtime += 1
         time.sleep(1)
+
 
 def logger(messages):
     # Esta funcion escribe en un archivo de texto la cantidad de registros en vistas materializadas
@@ -279,6 +283,7 @@ def logger(messages):
         except FileNotFoundError:
             with open("log.txt", 'w') as file:
                 file.write(message + '\n')
+
 
 getTableNames()
 getMatViewsDefinition()
